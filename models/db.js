@@ -1,6 +1,7 @@
 const express = require('express');
 const router = express.Router();
 const mysql = require('mysql2/promise');
+const { body, validationResult } = require('express-validator');
 
 const pool = mysql.createPool({
   host: 'localhost',
@@ -12,37 +13,19 @@ const pool = mysql.createPool({
   queueLimit: 0
 });
 
-// Ruta GET para obtener todas las entradas del diario
-router.get('/entries', async (req, res) => {
-  try {
-    const connection = await pool.getConnection();
-    const [rows] = await connection.query('SELECT * FROM entries');
-    connection.release();
-    res.json(rows);
-  } catch (error) {
-    res.status(500).json({ message: error.message });
-  }
-});
-
-// Ruta GET para obtener una entrada específica del diario por ID
-router.get('/entries/:id', async (req, res) => {
-  const entryId = req.params.id;
-  try {
-    const connection = await pool.getConnection();
-    const [rows] = await connection.query('SELECT * FROM entries WHERE id = ?', [entryId]);
-    connection.release();
-    if (rows.length > 0) {
-      res.json(rows[0]);
-    } else {
-      res.status(404).json({ message: 'Entrada no encontrada' });
-    }
-  } catch (error) {
-    res.status(500).json({ message: error.message });
-  }
-});
+// Middleware de validación para los campos title y content
+const validateEntry = [
+  body('title').notEmpty().withMessage('El título no puede estar vacío').trim(),
+  body('content').notEmpty().withMessage('El contenido no puede estar vacío').trim(),
+];
 
 // Ruta POST para crear una nueva entrada en el diario
-router.post('/entries', async (req, res) => {
+router.post('/entries', validateEntry, async (req, res) => {
+  const errors = validationResult(req);
+  if (!errors.isEmpty()) {
+    return res.status(400).json({ errors: errors.array() });
+  }
+
   const { title, content } = req.body;
   try {
     const connection = await pool.getConnection();
@@ -55,7 +38,12 @@ router.post('/entries', async (req, res) => {
 });
 
 // Ruta PUT para actualizar una entrada del diario por ID
-router.put('/entries/:id', async (req, res) => {
+router.put('/entries/:id', validateEntry, async (req, res) => {
+  const errors = validationResult(req);
+  if (!errors.isEmpty()) {
+    return res.status(400).json({ errors: errors.array() });
+  }
+
   const entryId = req.params.id;
   const { title, content } = req.body;
   try {
